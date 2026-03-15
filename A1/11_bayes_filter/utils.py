@@ -77,16 +77,18 @@ def sensor_model(observation, belief, world):
 
 
 def recursive_bayes_filter(actions, observations, belief, world):
-
-    n_actions = len(actions)
-    n_observations = len(observations)
-
     current_belief = belief.copy()
-
-    if n_observations == n_actions + 1:
+    
+    if len(observations) == len(actions) + 1:
         current_belief = sensor_model(observations[0], current_belief, world)
-        for action, observation in zip(actions, observations[1:]):
-            current_belief = motion_model(action, current_belief)
-            current_belief = sensor_model(observation, current_belief, world)
+        obs_to_process = observations[1:]
+    else:
+        obs_to_process = observations
+        
+    for action, observation in zip(actions, obs_to_process):
+        # Prediction (Motion)
+        current_belief = motion_model(action, current_belief)
+        # Correction (Sensor)
+        current_belief = sensor_model(observation, current_belief, world)
 
     return current_belief
