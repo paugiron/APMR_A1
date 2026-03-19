@@ -71,28 +71,84 @@ def bresenham(x0, y0, x1, y1):
 
     
 def prob2logodds(p):
-
-    # YOUR CODE HERE
-    raise NotImplementedError()
-    # -----
+    # convert occupancy probability to log-odds
+    # l = log( p / (1 - p) )
+    p = np.asarray(p, dtype=np.float64)
+    # Numerical safety: avoid p=0 or p=1 (would produce infinite log-odds)
+    p = np.clip(p, 1e-6, 1 - 1e-6)
+    return np.log(p / (1 - p))
 
     
 def logodds2prob(l):
-
-    # YOUR CODE HERE
-    raise NotImplementedError()
-    # -----
+    # inverse conversion from log-odds to probability
+    # p = 1 / (1 + exp(-l))
+    l = np.asarray(l, dtype=np.float64)
+    return 1.0 / (1.0 + np.exp(-l))
 
     
 def inv_sensor_model(cell, endpoint, prob_occ, prob_free):
+    """Build the inverse sensor model for one laser beam.
 
-    # YOUR CODE HERE
-    raise NotImplementedError()
-    # -----
+    Output format per row: [x_cell, y_cell, occupancy_probability].
+    - Cells on the ray before the hit -> prob_free
+    - Final hit cell (endpoint)       -> prob_occ
+    """
+    x0, y0 = int(cell[0]), int(cell[1])
+    x1, y1 = int(endpoint[0]), int(endpoint[1])
+
+    # compute all cells in the beam using Bresenham line tracing
+    ray_cells = bresenham(x0, y0, x1, y1)
+    sensor_model = np.zeros((ray_cells.shape[0], 3), dtype=np.float64)
+    sensor_model[:, 0:2] = ray_cells
+    # By default, traversed cells are considered free.
+    sensor_model[:, 2] = prob_free
+    # The final cell corresponds to the obstacle hit by the laser.
+    sensor_model[-1, 2] = prob_occ
+
+    return sensor_model
 
 
 def grid_mapping_with_known_poses(ranges_raw, poses_raw, occ_gridmap, map_res, prob_occ, prob_free, prior):
+    """Compute occupancy grid map using known robot poses and laser scans.
 
-    # YOUR CODE HERE
-    raise NotImplementedError()
-    # -----
+    Big picture:
+    1) Convert map to log-odds.
+    2) For each pose, project all laser endpoints into map cells.
+    3) For each beam, update traversed cells (free) and endpoint (occupied).
+    4) Convert final log-odds map back to probabilities.
+    """
+    # We keep the map in log-odds because updates are additive.
+    log_odds_map = prob2logodds(occ_gridmap.copy())
+    prior_log_odds = prob2logodds(prior)
+
+    rows, cols = occ_gridmap.shape
+
+    # Loop over time: one robot pose + one full scan each iteration.
+    for time_idx in range(poses_raw.shape[0]):
+        # Robot pose in map coordinates (cell indices).
+        m_robot_pose = poses2cells(poses_raw[time_idx, :], occ_gridmap, map_res)
+        # Laser hits (beam endpoints) converted to map cells.
+        m_endpoints = ranges2cells(ranges_raw[time_idx, :], poses_raw[time_idx, :], occ_gridmap, map_res)
+
+        # We only need x,y cell indices (theta is not needed for ray casting).
+        robot_cell = m_robot_pose[0:2]
+
+        # Process each laser beam independently.
+        for beam_idx in range(m_endpoints.shape[1]):
+            endpoint = m_endpoints[:, beam_idx]
+            # Build local inverse model for this single beam.
+            sensor_cells = inv_sensor_model(robot_cell, endpoint, prob_occ, prob_free)
+
+            # Update every affected cell using:
+            # l_t(m_i) = l_{t-1}(m_i) + l(m_i|z_t) - l0
+            # where l0 is the prior log-odds.
+            for sensor_cell in sensor_cells:
+                map_x = int(sensor_cell[0])
+                map_y = int(sensor_cell[1])
+
+                # Safety check: skip cells that fall outside the map array.
+                if 0 <= map_x < rows and 0 <= map_y < cols:
+                    log_odds_map[map_x, map_y] += prob2logodds(sensor_cell[2]) - prior_log_odds
+
+    # Return standard occupancy probabilities for plotting/inspection.
+    return logodds2prob(log_odds_map)
