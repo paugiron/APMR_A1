@@ -74,31 +74,50 @@ def ekf_predict(mu, sigma, u_t, R_t):
     
     # Estimate the deltas in odometry, given u_t (d_rot1, dtrans, d_rot2)
     # YOUR CODE HERE
-    raise NotImplementedError()
+    d_rot1, d_trans, d_rot2 = inv_motion_model(u_t)
+    theta = mu[2, 0]
     # -----
 
     # Compute the Jacobian of the motion model with respect to the previous state (G_t)
     # YOUR CODE HERE
-    raise NotImplementedError()
+    G_t = np.array([
+            [1, 0, -d_trans * np.sin(theta + d_rot1)],
+            [0, 1,  d_trans * np.cos(theta + d_rot1)],
+            [0, 0, 1]
+        ]) 
     # -----
 
     # Compute the Jacobian of the motion model with respect to the motion parameters (V_t)
     # YOUR CODE HERE
-    raise NotImplementedError()
+    V_t = np.array([
+            [-d_trans * np.sin(theta + d_rot1), np.cos(theta + d_rot1), 0],
+            [ d_trans * np.cos(theta + d_rot1), np.sin(theta + d_rot1), 0],
+            [1, 0, 1]
+        ])
+
     # -----
     
     # Compute the prediction of the mean (mu_bar)
     # YOUR CODE HERE
-    raise NotImplementedError()
+    mu_bar = mu + np.array([
+            [d_trans * np.cos(theta + d_rot1)],
+            [d_trans * np.sin(theta + d_rot1)],
+            [wrapToPi(d_rot1 + d_rot2)]
+        ])
+    mu_bar[2, 0] = wrapToPi(mu_bar[2, 0])
     # -----
              
     # Compute the prediction of the covariance matrix (sigma_bar)
     # YOUR CODE HERE
-    raise NotImplementedError()
+    sigma_bar = G_t @ sigma @ G_t.T + R_t
     # -----    
+    return mu_bar, sigma_bar
 
 
 def ekf_correct(mu_bar, sigma_bar, z, Q, M):
+
+    mu = mu_bar.copy()
+    sigma = sigma_bar.copy()
     
     # Complete the following code according to the indicated steps
     for i in range(z.shape[1]):
@@ -112,30 +131,42 @@ def ekf_correct(mu_bar, sigma_bar, z, Q, M):
         
         # Compute the distance between the pose of the robot and the landmark (q and dist = sqrt(q))
         # YOUR CODE HERE
-        raise NotImplementedError()
+        dx = lx - mu[0, 0] 
+        dy = ly - mu[1, 0] 
+        q = dx**2 + dy**2 
+        dist = np.sqrt(q) 
         # -----
         
         # Compute the Jacobian for the observation model (H^i_t)
         # YOUR CODE HERE
-        raise NotImplementedError()
+        H_i_t = np.array([
+            [-dx/dist, -dy/dist, 0],
+            [ dy/q,    -dx/q,   -1]
+        ])
         # -----
     
         # Compute the Kalman Gain (K)
         # YOUR CODE HERE
-        raise NotImplementedError()
+        S = H_i_t @ sigma @ H_i_t.T + Q 
+        K = sigma @ H_i_t.T @ np.linalg.inv(S) 
         # -----
         
         # Compute the expected observation (z_hat)
         # YOUR CODE HERE
-        raise NotImplementedError()
-        # -----
+        z_hat = np.array([
+            [dist],
+            [wrapToPi(np.atan2(dy, dx) - mu[2, 0])]
+        ])
     
         # Correct the mean (mu)
         # YOUR CODE HERE
-        raise NotImplementedError()
-        # -----
-    
+        z_actual = z[:2, i].reshape(2, 1) # we take the measured rho and phi for the i-th observation
+        innovation = z_actual - z_hat 
+        innovation[1, 0] = wrapToPi(innovation[1, 0])
+        mu = mu + K @ innovation
+        mu[2, 0] = wrapToPi(mu[2, 0])
         # Correct the covariance matrix (sigma)
         # YOUR CODE HERE
-        raise NotImplementedError()
-        # -----
+        sigma = (np.eye(3) - K @ H_i_t) @ sigma
+
+    return mu, sigma
