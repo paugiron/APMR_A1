@@ -71,22 +71,27 @@ def bresenham(x0, y0, x1, y1):
 
     
 def prob2logodds(p):
+    # YOUR CODE HERE
     # convert occupancy probability to log-odds
     # l = log( p / (1 - p) )
     p = np.asarray(p, dtype=np.float64)
     # Numerical safety: avoid p=0 or p=1 (would produce infinite log-odds)
     p = np.clip(p, 1e-6, 1 - 1e-6)
     return np.log(p / (1 - p))
+    # -----
 
     
 def logodds2prob(l):
+    # YOUR CODE HERE
     # inverse conversion from log-odds to probability
     # p = 1 / (1 + exp(-l))
     l = np.asarray(l, dtype=np.float64)
     return 1.0 / (1.0 + np.exp(-l))
+    # -----
 
     
 def inv_sensor_model(cell, endpoint, prob_occ, prob_free):
+    # YOUR CODE HERE
     """Build the inverse sensor model for one laser beam.
 
     Output format per row: [x_cell, y_cell, occupancy_probability].
@@ -106,9 +111,11 @@ def inv_sensor_model(cell, endpoint, prob_occ, prob_free):
     sensor_model[-1, 2] = prob_occ
 
     return sensor_model
+    # -----
 
 
 def grid_mapping_with_known_poses(ranges_raw, poses_raw, occ_gridmap, map_res, prob_occ, prob_free, prior):
+    # YOUR CODE HERE
     """Compute occupancy grid map using known robot poses and laser scans.
 
     Big picture:
@@ -152,3 +159,4 @@ def grid_mapping_with_known_poses(ranges_raw, poses_raw, occ_gridmap, map_res, p
 
     # Return standard occupancy probabilities for plotting/inspection.
     return logodds2prob(log_odds_map)
+    # -----
